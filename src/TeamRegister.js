@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
-import supabase from './supabaseClient';
-import { getUser } from './auth';
+import { getUser, getToken } from './auth';
 
-const loggedInUser = getUser();
-const SIMULATED_ROLL = loggedInUser?.roll_number;
+const API = 'https://prakalp-backend-e246.onrender.com/api';
 
 function TeamRegister() {
   const [loading, setLoading] = useState(true);
@@ -17,6 +15,7 @@ function TeamRegister() {
   const [successTeam, setSuccessTeam] = useState(null);
 
   useEffect(() => {
+    const loggedInUser = getUser();
     if (!loggedInUser) {
       window.location.href = '/';
       return;
@@ -24,41 +23,23 @@ function TeamRegister() {
     const checkLeader = async () => {
       setLoading(true);
       setError('');
-
-      const { data: student, error: sErr } = await supabase
-        .from('college_students')
-        .select('*')
-        .eq('roll_number', SIMULATED_ROLL)
-        .single();
-
-      if (sErr || !student) {
-        setError('Roll number not found. Contact admin.');
-        setLoading(false);
-        return;
+      try {
+        const token = getToken();
+        const res = await fetch(`${API}/teams/my`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+          setSuccessTeam(data.project);
+          setStep(3);
+        } else {
+          setLeaderData(loggedInUser);
+        }
+      } catch (err) {
+        setLeaderData(loggedInUser);
       }
-
-      if (student.year_of_study !== 1) {
-        setError('Only 1st year students can register a project.');
-        setLoading(false);
-        return;
-      }
-
-      const { data: existing } = await supabase
-        .from('prakalp_team_members')
-        .select('id')
-        .eq('student_id', student.id)
-        .is('removed_at', null);
-
-      if (existing && existing.length > 0) {
-        setError('You are already registered in a team.');
-        setLoading(false);
-        return;
-      }
-
-      setLeaderData(student);
       setLoading(false);
     };
-
     checkLeader();
   }, []);
 
@@ -74,87 +55,28 @@ function TeamRegister() {
     e.preventDefault();
     setLoading(true);
     setError('');
-
-    const validRolls = memberRolls
-      .map(r => r.trim())
-      .filter(r => r !== '' && r !== SIMULATED_ROLL);
-
-    const memberStudents = [];
-    for (let roll of validRolls) {
-      const { data: student } = await supabase
-        .from('college_students')
-        .select('id, roll_number, full_name')
-        .eq('roll_number', roll)
-        .single();
-
-      if (!student) {
-        setError(`Roll number "${roll}" not found.`);
-        setLoading(false);
-        return;
-      }
-
-      const { data: memCheck } = await supabase
-        .from('prakalp_team_members')
-        .select('id')
-        .eq('student_id', student.id)
-        .is('removed_at', null);
-
-      if (memCheck && memCheck.length > 0) {
-        setError(`${roll} is already in another team.`);
-        setLoading(false);
-        return;
-      }
-
-      memberStudents.push(student);
-    }
-
     try {
-      const { data: event } = await supabase
-        .from('events')
-        .select('id')
-        .eq('is_active', true)
-        .eq('eligible_year', 1)
-        .single();
-
-      if (!event) {
-        setError('No active event found. Contact admin.');
-        setLoading(false);
-        return;
+      const token = getToken();
+      const validRolls = memberRolls.map(r => r.trim()).filter(r => r !== '');
+      const res = await fetch(`${API}/teams/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ projectTitle, subjectCategory, description, memberRolls: validRolls })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setError(data.message);
+      } else {
+        setSuccessTeam(data.project);
+        setStep(3);
       }
-
-      const { data: team, error: teamErr } = await supabase
-        .from('prakalp_teams')
-        .insert({
-          event_id: event.id,
-          project_title: projectTitle,
-          subject_category: subjectCategory,
-          description: description,
-          leader_id: leaderData.id,
-        })
-        .select()
-        .single();
-
-      if (teamErr) throw teamErr;
-
-      const allMembers = [leaderData, ...memberStudents].map(s => ({
-        team_id: team.id,
-        student_id: s.id,
-      }));
-
-      const { error: memberErr } = await supabase
-        .from('prakalp_team_members')
-        .insert(allMembers);
-
-      if (memberErr) throw memberErr;
-
-      setSuccessTeam(team);
-      setStep(3);
-
     } catch (err) {
       setError('Something went wrong: ' + err.message);
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   return (
@@ -168,7 +90,7 @@ function TeamRegister() {
           <h2 style={heading}>Register Your Project</h2>
           <p style={sub}>
             Leader: <strong style={{ color: '#f97316' }}>
-              {leaderData.full_name} ({leaderData.roll_number})
+              {leaderData.name} ({leaderData.roll_number})
             </strong>
           </p>
           <label style={label}>Project Title *</label>
@@ -180,11 +102,7 @@ function TeamRegister() {
             style={input}
           />
           <label style={label}>Subject Category</label>
-          <select
-            value={subjectCategory}
-            onChange={e => setSubjectCategory(e.target.value)}
-            style={input}
-          >
+          <select value={subjectCategory} onChange={e => setSubjectCategory(e.target.value)} style={input}>
             <option value="">Select category</option>
             <option>AI & ML</option>
             <option>IoT</option>
@@ -229,10 +147,10 @@ function TeamRegister() {
           <h2 style={heading}>Project Registered!</h2>
           <p style={sub}>Your team is now active for Prakalp 2025.</p>
           <div style={successCard}>
-            <p><strong>Project:</strong> {successTeam.project_title}</p>
-            <p><strong>Category:</strong> {successTeam.subject_category || '—'}</p>
+            <p><strong>Project:</strong> {successTeam.title}</p>
+            <p><strong>Category:</strong> {successTeam.subject || '—'}</p>
             <p style={{ fontSize: '0.75rem', color: '#9aa3b2', marginTop: '8px' }}>
-              Team ID: {successTeam.id}
+              Team ID: {successTeam._id}
             </p>
           </div>
         </div>
