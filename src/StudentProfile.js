@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react';
 import supabase from './supabaseClient';
 import { getUser } from './auth';
 
-const loggedInUser = getUser();
-
 const BADGE_CONFIG = {
   Bronze:   { emoji: '🥉', color: '#cd7f32', bg: 'rgba(205,127,50,0.1)',  border: 'rgba(205,127,50,0.3)',  points: 50  },
   Silver:   { emoji: '🥈', color: '#c0c0c0', bg: 'rgba(192,192,192,0.1)', border: 'rgba(192,192,192,0.3)', points: 150 },
@@ -24,6 +22,7 @@ function StudentProfile() {
   const [badges, setBadges] = useState([]);
   const [achievements, setAchievements] = useState([]);
   const [error, setError] = useState('');
+  const loggedInUser = getUser();
 
   useEffect(() => {
     if (!loggedInUser) { window.location.href = '/'; return; }
@@ -33,7 +32,7 @@ function StudentProfile() {
       // Get student
       const { data: studentData } = await supabase
         .from('college_students')
-        .select('id, full_name, roll_number, year_of_study, branch')
+        .select('id, full_name, roll_number, year_of_study, department')
         .eq('roll_number', loggedInUser.roll_number)
         .single();
 
@@ -99,7 +98,7 @@ function StudentProfile() {
           </div>
           <div>
             <h1 style={pageTitle}>{student?.full_name}</h1>
-            <p style={muted}>{student?.roll_number} · Year {student?.year_of_study} · {student?.branch || 'Engineering'}</p>
+            <p style={muted}>{student?.roll_number} · Year {student?.year_of_study} · {student?.department || 'Engineering'}</p>
           </div>
         </div>
 

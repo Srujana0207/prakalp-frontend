@@ -6,14 +6,19 @@ export async function loginStudent(email, password) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
   });
-  return await res.json();
+  const data = await res.json();
+  if (data.token) {
+    localStorage.setItem('prakalp_token', data.token);
+    localStorage.setItem('prakalp_student', JSON.stringify(data.student));
+  }
+  return data;
 }
 
 export function getUser() {
-  return JSON.parse(localStorage.getItem('user') || 'null');
+  return JSON.parse(localStorage.getItem('prakalp_student') || 'null');
 }
 
 export function logoutStudent() {
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
+  localStorage.removeItem('prakalp_token');
+  localStorage.removeItem('prakalp_student');
 }
