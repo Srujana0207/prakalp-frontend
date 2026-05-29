@@ -1,57 +1,43 @@
 import { useState, useEffect } from 'react';
-import supabase from './supabaseClient';
-import { getUser } from './auth';
+import { getUser, getToken } from './auth';
 
-const loggedInUser = getUser();
-const SIMULATED_ROLL = loggedInUser?.roll_number;
+const API = 'https://prakalp-backend-e246.onrender.com/api';
 
 function ProgressUpdate() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [team, setTeam] = useState(null);
-  const [updates, setUpdates] = useState([]);
   const [error, setError] = useState('');
   const [percentage, setPercentage] = useState('');
   const [note, setNote] = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
+    const loggedInUser = getUser();
     if (!loggedInUser) { window.location.href = '/'; return; }
     const loadTeam = async () => {
       setLoading(true);
       setError('');
-
-      const { data: student } = await supabase
-        .from('college_students')
-        .select('id, full_name')
-        .eq('roll_number', SIMULATED_ROLL)
-        .single();
-
-      if (!student) { setError('Student not found.'); setLoading(false); return; }
-
-      const { data: teamData } = await supabase
-        .from('prakalp_teams')
-        .select(`id, project_title, subject_category, description, is_active, events(name, active_start_date, active_end_date)`)
-        .eq('leader_id', student.id)
-        .single();
-
-      if (!teamData) { setError('You are not a team leader. Only leaders can post updates.'); setLoading(false); return; }
-
-      setTeam(teamData);
-
-      const { data: existingUpdates } = await supabase
-        .from('progress_updates')
-        .select('*')
-        .eq('team_id', teamData.id)
-        .order('created_at', { ascending: false });
-
-      setUpdates(existingUpdates || []);
+      try {
+        const token = getToken();
+        const res = await fetch(`${API}/teams/my`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!data.success) {
+          setError('You are not a team leader. Only leaders can post updates.');
+        } else {
+          setTeam(data.project);
+        }
+      } catch (err) {
+        setError('Failed to load team.');
+      }
       setLoading(false);
     };
     loadTeam();
   }, []);
 
-  const latestPercentage = updates.length > 0 ? updates[0].percentage : 0;
+  const latestPercentage = team?.progress || 0;
   const isComplete = latestPercentage === 100;
 
   const handleSubmit = async (e) => {
@@ -60,27 +46,33 @@ function ProgressUpdate() {
     setError('');
     setSuccess('');
     const pct = parseInt(percentage);
-
-    if (isNaN(pct) || pct < 0 || pct > 100) { setError('Percentage must be between 0 and 100.'); setSubmitting(false); return; }
-    if (pct < latestPercentage) { setError(`Cannot go below current progress (${latestPercentage}%).`); setSubmitting(false); return; }
-
-    const { data: student } = await supabase.from('college_students').select('id').eq('roll_number', SIMULATED_ROLL).single();
-
-    const { error: insertErr } = await supabase.from('progress_updates').insert({
-      team_id: team.id,
-      uploaded_by: student.id,
-      percentage: pct,
-      note: note.trim() || null,
-      photo_url: null,
-    });
-
-    if (insertErr) { setError('Failed to save update: ' + insertErr.message); setSubmitting(false); return; }
-
-    const { data: refreshed } = await supabase.from('progress_updates').select('*').eq('team_id', team.id).order('created_at', { ascending: false });
-    setUpdates(refreshed || []);
-    setPercentage('');
-    setNote('');
-    setSuccess(pct === 100 ? '🎉 Project marked 100% complete! You can now upload photos/videos.' : '✅ Progress updated successfully!');
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      setError('Percentage must be between 0 and 100.');
+      setSubmitting(false);
+      return;
+    }
+    try {
+      const token = getToken();
+      const res = await fetch(`${API}/teams/progress`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ percentage: pct, note: note.trim() })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setError(data.message);
+      } else {
+        setTeam(data.project);
+        setPercentage('');
+        setNote('');
+        setSuccess(pct === 100 ? '🎉 Project marked 100% complete! You can now upload QR.' : '✅ Progress updated successfully!');
+      }
+    } catch (err) {
+      setError('Something went wrong: ' + err.message);
+    }
     setSubmitting(false);
   };
 
@@ -92,8 +84,8 @@ function ProgressUpdate() {
         <>
           <div style={card}>
             <div style={eyebrow}>Prakalp 2025</div>
-            <h2 style={heading}>{team.project_title}</h2>
-            <p style={muted}>{team.subject_category} · {team.description}</p>
+            <h2 style={heading}>{team.title}</h2>
+            <p style={muted}>{team.subject} · {team.description}</p>
             <div style={ringWrap}>
               <svg width="120" height="120" style={{ transform: 'rotate(-90deg)' }}>
                 <circle cx="60" cy="60" r="50" fill="none" stroke="#1e293b" strokeWidth="10" />
@@ -122,7 +114,7 @@ function ProgressUpdate() {
               <p style={{ fontSize: '1.5rem' }}>🎉</p>
               <p style={{ color: '#22c55e', fontWeight: '700', marginBottom: '12px' }}>Project Complete!</p>
               <button onClick={() => window.location.href = '/upload-media'} style={{ ...btn, background: '#22c55e' }}>
-                📸 Upload Photos & Videos
+                📸 Upload QR Code
               </button>
             </div>
           )}
@@ -146,7 +138,7 @@ function ProgressUpdate() {
                 />
                 <label style={label}>Note / Update Description</label>
                 <textarea
-                  placeholder="What did your team work on? Any milestones reached?"
+                  placeholder="What did your team work on?"
                   value={note}
                   onChange={e => setNote(e.target.value)}
                   rows={3}
@@ -156,26 +148,6 @@ function ProgressUpdate() {
                   {submitting ? 'Saving...' : '📊 Post Update'}
                 </button>
               </form>
-            </div>
-          )}
-
-          {updates.length > 0 && (
-            <div style={card}>
-              <h3 style={{ ...heading, fontSize: '1.1rem', marginBottom: '16px' }}>Progress History</h3>
-              {updates.map((u, idx) => (
-                <div key={u.id} style={historyItem}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <span style={{ fontWeight: '800', fontSize: '1.1rem', color: u.percentage === 100 ? '#22c55e' : '#f97316' }}>
-                      {u.percentage}%
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: '#9aa3b2' }}>
-                      {new Date(u.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                  {u.note && <p style={{ fontSize: '0.875rem', color: '#c8d0e0', margin: 0 }}>{u.note}</p>}
-                  {idx < updates.length - 1 && <div style={divider} />}
-                </div>
-              ))}
             </div>
           )}
         </>
@@ -196,7 +168,5 @@ const errorBox = { background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444
 const successBox = { background: 'rgba(34,197,94,0.1)', border: '1px solid #22c55e', borderRadius: '10px', padding: '12px 16px', color: '#22c55e', marginBottom: '16px' };
 const ringWrap = { position: 'relative', width: '120px', height: '120px', margin: '20px auto 0' };
 const ringLabel = { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' };
-const historyItem = { paddingBottom: '12px' };
-const divider = { height: '1px', background: 'rgba(255,255,255,0.06)', margin: '12px 0' };
 
 export default ProgressUpdate;
