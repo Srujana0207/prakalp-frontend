@@ -17,11 +17,14 @@ export async function loginStudent(email, password) {
 export function getUser() {
   const user = JSON.parse(localStorage.getItem('prakalp_student') || 'null');
   if (!user) return null;
-  // normalize rollNumber → roll_number
   if (user.rollNumber && !user.roll_number) {
     user.roll_number = user.rollNumber;
   }
   return user;
+}
+
+export function getToken() {
+  return localStorage.getItem('prakalp_token');
 }
 
 export function logoutStudent() {
