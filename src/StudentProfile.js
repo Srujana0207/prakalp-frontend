@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import supabase from './supabaseClient';
 import { getUser } from './auth';
 
+const API = 'https://prakalp-backend-e246.onrender.com/api';
+
 const BADGE_CONFIG = {
   Bronze:   { emoji: '🥉', color: '#cd7f32', bg: 'rgba(205,127,50,0.1)',  border: 'rgba(205,127,50,0.3)',  points: 50  },
   Silver:   { emoji: '🥈', color: '#c0c0c0', bg: 'rgba(192,192,192,0.1)', border: 'rgba(192,192,192,0.3)', points: 150 },
@@ -29,7 +31,7 @@ function StudentProfile() {
     const load = async () => {
       setLoading(true);
 
-      // Get student
+      // Get student from Supabase
       const { data: studentData } = await supabase
         .from('college_students')
         .select('id, full_name, roll_number, year_of_study, department')
@@ -39,16 +41,34 @@ function StudentProfile() {
       if (!studentData) { setError('Student not found.'); setLoading(false); return; }
       setStudent(studentData);
 
-      // Get points
+      // Get points from Supabase (Prakalp/project points)
       const { data: pointsData } = await supabase
         .from('student_points')
         .select('total_points')
         .eq('student_id', studentData.id)
         .single();
 
-      setPoints(pointsData?.total_points || 0);
+      const supabasePoints = pointsData?.total_points || 0;
 
-      // Get badges
+      // Get points from MongoDB backend (hackathon/achievement points)
+      let mongoPoints = 0;
+      try {
+        const token = localStorage.getItem('prakalp_token');
+        if (token) {
+          const res = await fetch(`${API}/auth/profile`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const mongoData = await res.json();
+          mongoPoints = mongoData?.student?.rankScore || 0;
+        }
+      } catch (e) {
+        console.log('MongoDB points not available:', e.message);
+      }
+
+      // Combine both sources
+      setPoints(supabasePoints + mongoPoints);
+
+      // Get badges from Supabase
       const { data: badgesData } = await supabase
         .from('student_badges')
         .select('*')
@@ -57,7 +77,7 @@ function StudentProfile() {
 
       setBadges(badgesData || []);
 
-      // Get achievements
+      // Get achievements from Supabase
       const { data: achievementsData } = await supabase
         .from('achievements')
         .select('*')
@@ -170,18 +190,12 @@ function StudentProfile() {
       <div style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h2 style={{ ...sectionTitle, margin: 0 }}>📋 Submissions ({achievements.length})</h2>
-          <button onClick={() => window.location.href = '/submit-achievement'} style={addBtn}>
-            + Add New
-          </button>
         </div>
 
         {achievements.length === 0 && (
           <div style={{ textAlign: 'center', padding: '32px', color: '#9aa3b2' }}>
             <p style={{ fontSize: '2rem', marginBottom: '8px' }}>📭</p>
-            <p>No submissions yet. Submit your first achievement!</p>
-            <button onClick={() => window.location.href = '/submit-achievement'} style={btn}>
-              🚀 Submit Achievement
-            </button>
+            <p>No submissions yet.</p>
           </div>
         )}
 
@@ -234,7 +248,5 @@ const badgeProgress = { textAlign: 'center', background: '#0b1020', borderRadius
 const earnedTag = { display: 'inline-block', marginTop: '6px', fontSize: '0.65rem', background: 'rgba(34,197,94,0.15)', color: '#22c55e', padding: '2px 8px', borderRadius: '99px', fontWeight: '700' };
 const achievementItem = { background: '#0b1020', borderRadius: '10px', padding: '14px', marginBottom: '10px' };
 const statusTag = { fontSize: '0.65rem', fontWeight: '700', padding: '3px 8px', borderRadius: '99px', textTransform: 'uppercase' };
-const btn = { padding: '11px 24px', background: 'linear-gradient(135deg,#f97316,#fb923c)', color: '#0b1020', fontWeight: '800', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '0.875rem' };
-const addBtn = { padding: '8px 16px', background: 'transparent', color: '#f97316', border: '1px solid rgba(249,115,22,0.4)', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '700' };
 
 export default StudentProfile;
