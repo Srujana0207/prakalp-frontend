@@ -4,6 +4,7 @@ import ProgressUpdate from './ProgressUpdate';
 import MediaUpload from './MediaUpload';
 import ProjectPage from './ProjectPage';
 import StudentProfile from './StudentProfile';
+import Navbar from './Navbar';
 
 function Home() {
   return (
@@ -19,20 +20,31 @@ function Home() {
 function ProtectedRoute({ children }) {
   const user = JSON.parse(localStorage.getItem('prakalp_student') || 'null');
   if (!user) return <Navigate to="/" replace />;
-  return children;
+  return (
+    <>
+      <Navbar />
+      {children}
+    </>
+  );
 }
 
 function FirstYearOnly({ children }) {
   const user = JSON.parse(localStorage.getItem('prakalp_student') || 'null');
   if (!user) return <Navigate to="/" replace />;
-  if (user.year !== 1) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center', color: '#ef4444', background: '#0b1020', minHeight: '100vh' }}>
+  if (user.year !== 1) return (
+    <>
+      <Navbar />
+      <div style={{ padding:'40px', textAlign:'center', color:'#c84b1f', background:'#f5f0e8', minHeight:'100vh', fontFamily:"'Cabinet Grotesk',sans-serif" }}>
         ⚠️ Only 1st year students can access this page.
       </div>
-    );
-  }
-  return children;
+    </>
+  );
+  return (
+    <>
+      <Navbar />
+      {children}
+    </>
+  );
 }
 
 function App() {
@@ -40,24 +52,10 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
-
-        <Route path="/register-team" element={
-          <FirstYearOnly><TeamRegister /></FirstYearOnly>
-        } />
-
-        <Route path="/progress" element={
-          <ProtectedRoute><ProgressUpdate /></ProtectedRoute>
-        } />
-
-        <Route path="/upload-media" element={
-          <ProtectedRoute><MediaUpload /></ProtectedRoute>
-        } />
-
-        <Route path="/profile" element={
-          <ProtectedRoute><StudentProfile /></ProtectedRoute>
-        } />
-
-        {/* Public — for QR code scans */}
+        <Route path="/register-team" element={<FirstYearOnly><TeamRegister /></FirstYearOnly>} />
+        <Route path="/progress" element={<ProtectedRoute><ProgressUpdate /></ProtectedRoute>} />
+        <Route path="/upload-media" element={<ProtectedRoute><MediaUpload /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><StudentProfile /></ProtectedRoute>} />
         <Route path="/project/:teamId" element={<ProjectPage />} />
       </Routes>
     </BrowserRouter>
