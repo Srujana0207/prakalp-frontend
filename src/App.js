@@ -4,16 +4,11 @@ import ProgressUpdate from './ProgressUpdate';
 import MediaUpload from './MediaUpload';
 import ProjectPage from './ProjectPage';
 import StudentProfile from './StudentProfile';
-import Navbar from './Navbar';
+import PageNav from './PageNav';
 
 function Home() {
   return (
-    <iframe
-      src="/prakalp-modified (4).html"
-      title="Prakalp Frontend"
-      width="100%"
-      style={{ border: "none", height: "100vh" }}
-    />
+    <iframe src="/prakalp-modified (4).html" title="Prakalp Frontend" width="100%" style={{ border: "none", height: "100vh" }}/>
   );
 }
 
@@ -22,8 +17,8 @@ function ProtectedRoute({ children }) {
   if (!user) return <Navigate to="/" replace />;
   return (
     <>
-      <Navbar />
       {children}
+      <PageNav />
     </>
   );
 }
@@ -33,16 +28,16 @@ function FirstYearOnly({ children }) {
   if (!user) return <Navigate to="/" replace />;
   if (user.year !== 1) return (
     <>
-      <Navbar />
-      <div style={{ padding:'40px', textAlign:'center', color:'#c84b1f', background:'#f5f0e8', minHeight:'100vh', fontFamily:"'Cabinet Grotesk',sans-serif" }}>
+      <div style={{padding:'40px', textAlign:'center', color:'#c84b1f', background:'#f5f0e8', minHeight:'100vh'}}>
         ⚠️ Only 1st year students can access this page.
       </div>
+      <PageNav />
     </>
   );
   return (
     <>
-      <Navbar />
       {children}
+      <PageNav />
     </>
   );
 }
